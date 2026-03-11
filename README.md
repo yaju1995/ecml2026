@@ -6,8 +6,7 @@ This repository contains the implementation and experiments associated with the 
 
 **Intraday Rescheduling in Adversarial Combinatorial Bandits: Application to Decentralized EV Fleet Charging**
 
-The project provides code to reproduce the experiment presented in the paper and includes tutorial notebooks to help users understand and experiment with the framework. The implementation relies on a preexisting simulation framework, which will be released after the review process for anonymization purposes.
-
+The project provides code to reproduce the experiment presented in the paper and includes tutorial notebooks to help users understand and experiment with the framework.
 ---
 
 ## Requirements
