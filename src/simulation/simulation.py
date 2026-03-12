@@ -168,10 +168,10 @@ class SimulationResults:
     computing_time: float # Computing time
     price_data: np.ndarray # Encountered_price_history.
     pv_data: np.ndarray # Encountered solar power production
-    price_f6pm_data: np.ndarray
-    pv_f6pm_data: np.ndarray
-    price_f11am_data: np.ndarray
-    pv_f11am_data: np.ndarray
+    price_f6pm_data: np.ndarray # Price Forecast dayahead 6pm history
+    pv_f6pm_data: np.ndarray # PV Forecast dayahead 6pm history
+    price_f11am_data: np.ndarray # Price Forecast dayahead 11am history
+    pv_f11am_data: np.ndarray # PV Forecast dayahead 11am history
     n_flexible_power: np.ndarray # Encountered non flexible history
     
 

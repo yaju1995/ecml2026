@@ -38,28 +38,26 @@ class MABFTPL(Strategy):
     def __init__(self, config: StrategyConfig):
         super().__init__(config)
 
-        self.T = config.T
-        self.D = config.D
-        self.M = config.M
-        self.perturbation = config.perturbation
+        self.T = config.T # episode dimension {0,1}^T
+        self.D = config.D # Number of episode
+        self.M = config.M # Geometric Resampling truncation index
+        self.perturbation = config.perturbation # FTPL perturbation
 
-        self.gamma = 0
-        self.n_obj = 0
+        self.gamma = 0 #Exploration factor
+        self.n_obj = 0 #Discrete stochastic demand
 
-        # Replace dicts by numpy arrays
-        self.L_hat = np.zeros(self.T)
-        self.L_hat_RS = np.zeros(self.T)
-        self.I = np.zeros(self.T)
-        self.I_RS = np.zeros(self.T)
-        self.N = np.zeros(self.T)
-        self.last_loss = np.zeros(self.T)
-        self.N_i = np.ones(self.T)
-        self.o = np.zeros(self.T)
+        self.L_hat = np.zeros(self.T) # Initial selection loss estimator
+        self.L_hat_RS = np.zeros(self.T) # Rescheduling loss estimator
+        self.I = np.zeros(self.T) # Importance weight Initial selection
+        self.I_RS = np.zeros(self.T) # Importance weight Rescheduling
+        self.N = np.zeros(self.T) # Number of selection tracker
+        self.last_loss = np.zeros(self.T) # Loss suffered at the last episode
+        self.o = np.zeros(self.T) # Observed disconnections
 
         self.S_mask = np.zeros(self.T, dtype=bool)
 
-        self.A_0 = set()
-        self.A_t = set()
+        self.A_0 = set() # Initialy selected schedule
+        self.A_t = set() # Executed schedule
         self.play_order = []
         self.observed_context_day = None
 
@@ -70,6 +68,7 @@ class MABFTPL(Strategy):
 
         self.observed_context_day = observed_context
         day = int(observed_context[7])
+        # Observe feasibility window
         t_a, t_b = int(observed_context[4]), int(observed_context[5])
 
         if day == 0:
@@ -82,9 +81,7 @@ class MABFTPL(Strategy):
                     / (2 * self.D * self.T)
                 ) ** (2 / 3)
 
-        # -------------------------------------
-        # PRECOMPUTE DECISION INDICES ONCE
-        # -------------------------------------
+
 
         S_indices = np.flatnonzero(self.S_mask)
         S_indices_rev = S_indices[::-1]
@@ -95,8 +92,10 @@ class MABFTPL(Strategy):
         for i in range(1, self.M + 1):
 
             Z = self.sample_perturbation()
-
-            # -------- CLASSIC FTPL ----------
+            
+            # -----------------------------------------
+            # Initial selection Geometric resampling
+            # -----------------------------------------
             temp_est = self.L_hat[S_indices] - Z[S_indices] / self.gamma
             order = np.argsort(temp_est)
             selected = S_indices[order[: self.n_obj]]
@@ -109,15 +108,17 @@ class MABFTPL(Strategy):
                     self.I[t] = i
                 r -= intersect
 
-            # -------- RS FTPL (precompute once) ----------
-            # Z_RS = self.sample_perturbation()
+            # -----------------------------------------
+            # Rescheduling selection Geometric resampling
+            # -----------------------------------------
             Z_RS = Z
 
+            # -------- Initial selection resampling ---------- 
             temp_est_RS = self.L_hat_RS[S_indices] - Z_RS[S_indices] / self.gamma
             order_RS = np.argsort(temp_est_RS)
             sorted_RS = S_indices[order_RS]
 
-            # -------- DSO reselection ----------
+            # -------- Rescheduling resampling ----------
             for t in S_indices_rev:
                 if t in V_ and self.o[t] == 1:
                     mask = (sorted_RS > t) & (sorted_RS < t_b)
@@ -141,7 +142,7 @@ class MABFTPL(Strategy):
             self.I_RS[list(r_RS)] = float(self.M)
 
         # -------------------------------------
-        # LOSS UPDATE (vectorized)
+        # LOSS UPDATE
         # -------------------------------------
         all_indices = np.arange(self.T)
 
@@ -162,18 +163,22 @@ class MABFTPL(Strategy):
         self.S_mask[t_a:t_b] = True
         self.last_loss[t_a:t_b] = 0.0
 
+        # Observe stochastic demand
         self.n_obj = int(observed_context[6])
 
+        # Update exploration factor if needed.
         if self.perturbation == "F2":
             self.gamma = 1.0 / np.sqrt(float(day) + 1.0)
 
         # -------------------------------------
-        # FINAL FTPL SELECTION
+        # Initial FTPL selection
         # -------------------------------------
 
+        # Perturbation Sampling
         S_indices = np.flatnonzero(self.S_mask)
         Z = self.sample_perturbation()
 
+        # Optimization oracle
         temp_est = self.L_hat[S_indices] - Z[S_indices] / self.gamma
         order = np.argsort(temp_est)
         sorted_t = S_indices[order]
@@ -181,13 +186,14 @@ class MABFTPL(Strategy):
         self.A_0 = set(sorted_t[: self.n_obj])
         self.A_t = self.A_0.copy()
 
-        # Z_RS = self.sample_perturbation()
+        # Precomputation of Reschuling perturbed loss.
         Z_RS = Z
 
         temp_est_RS = self.L_hat_RS[S_indices] - Z_RS[S_indices] / self.gamma
         order_RS = np.argsort(temp_est_RS)
         sorted_RS = S_indices[order_RS]
 
+        # Rescheduling priority order computation
         self.play_order = list(zip(sorted_RS, temp_est_RS[order_RS]))
 
               
@@ -216,6 +222,7 @@ class MABFTPL(Strategy):
             disconnect_t = int(observed_context[12])
             self.o[t] = disconnect_t
 
+            # Rescheduling
             if disconnect_t == 1:
 
                 future_candidates = [
@@ -227,7 +234,7 @@ class MABFTPL(Strategy):
                     self.A_t.add(future_candidates[0])
 
     # -------------------------------------------------------
-    # PERTURBATIONS (vectorized)
+    # PERTURBATIONS
     # -------------------------------------------------------
     def sample_perturbation(self):
 

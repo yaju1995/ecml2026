@@ -73,15 +73,13 @@ class PriorOpt(Strategy):
                 
                 unwired_t = int(observed_context[12])
 
-                if unwired_t == 1: # Reselect a future instant to play if unwired by DSO
-                    # Ajouter une action supplémentaire à A_t
-                    # Filtrer les instants déjà présents dans A_t
+                # Rescheduling
+                if unwired_t == 1: 
                     future_candidates = [i for i in self.moves_ordering if i not in self.A_t and t <= i <= t_b]
                     
                     if future_candidates:
-                        # Sélectionner le plus grand instant parmi les candidats restants
                         new_action = future_candidates[0]
-                        self.A_t.add(new_action)  # Ajouter cet instant à A_t
+                        self.A_t.add(new_action)
 
 
 Strategy.register("PRIOR OPT", PriorOpt)
