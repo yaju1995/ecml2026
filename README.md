@@ -48,7 +48,8 @@ Install the dependencies:
 pip install -e .
 ```
 
-To reproduce the simulations from the paper:
+
+To reproduce the simulation from the paper:
 
 1. Navigate to the `simulation` folder.
 2. Open the `simulation_ECML2026.ipynb` notebook and run the cells to produce the results presented in the article or run the python script `simulation_ECML2026.py`.
