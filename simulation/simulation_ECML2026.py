@@ -192,25 +192,25 @@ def main():
     # -------------------------------
     # Decentralized default
     # -------------------------------
-    # for strategy in strat_decentralized:
-    #     tasks = build_experiment_grid(
-    #         strategies=[strategy],
-    #         start_seed=0,
-    #         num_samples_classic=5,
-    #         mode="default",
-    #         num_agents=num_agents,
-    #     )
+    for strategy in strat_decentralized:
+        tasks = build_experiment_grid(
+            strategies=[strategy],
+            start_seed=0,
+            num_samples_classic=5,
+            mode="default",
+            num_agents=num_agents,
+        )
     
-    #     print(f"Total simulations to run {strategy}-default: {len(tasks)}")
+        print(f"Total simulations to run {strategy}-default: {len(tasks)}")
     
-    #     process_map(
-    #         run_simulation,
-    #         tasks,
-    #         max_workers=max_workers_decentralized,
-    #         chunksize=1,
-    #     )
+        process_map(
+            run_simulation,
+            tasks,
+            max_workers=max_workers_decentralized,
+            chunksize=1,
+        )
     
-    #     print(f"All simulations completed - {strategy}-default.")
+        print(f"All simulations completed - {strategy}-default.")
 
     # # -------------------------------
     # # Decentralized congestion-aware
@@ -240,25 +240,25 @@ def main():
     # -------------------------------
     # Centralized congestion-aware MILP
     # -------------------------------
-    for strategy in strat_centralized_ca:
-        tasks = build_experiment_grid(
-            strategies=[strategy],
-            start_seed=0,
-            num_samples_classic=num_samples,
-            mode="ca",
-            num_agents=num_agents,
-        )
+    # for strategy in strat_centralized_ca:
+    #     tasks = build_experiment_grid(
+    #         strategies=[strategy],
+    #         start_seed=0,
+    #         num_samples_classic=num_samples,
+    #         mode="ca",
+    #         num_agents=num_agents,
+    #     )
     
-        print(f"Total simulations to run - {strategy}-CA: {len(tasks)}")
+    #     print(f"Total simulations to run - {strategy}-CA: {len(tasks)}")
     
-        process_map(
-            run_simulation_CA,
-            tasks,
-            max_workers=max_workers_centralized,
-            chunksize=1,
-        )
+    #     process_map(
+    #         run_simulation_CA,
+    #         tasks,
+    #         max_workers=max_workers_centralized,
+    #         chunksize=1,
+    #     )
     
-        print(f"All simulations completed - {strategy}-CA.")
+    #     print(f"All simulations completed - {strategy}-CA.")
 
 
 # ==========================================================

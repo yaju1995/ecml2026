@@ -9,7 +9,8 @@ description = "Power Systems Analysis Tools"
 requires-python = ">=3.9,<3.10"
 dependencies = [
     # Core numeric stack
-    "numpy==2.0.2",
+    # "numpy==2.0.2",
+    "numpy==1.26.4",
     "pandas==2.3.3",
     "scipy==1.13.1",
 
@@ -19,6 +20,7 @@ dependencies = [
 
     # ML (you have scikit-learn in your list)
     "scikit-learn==1.6.1",
+    "torch==2.2.2",          
 
     # Progress + formatting
     "tqdm==4.67.3",

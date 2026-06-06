@@ -92,13 +92,14 @@ class EVState(AgentSize):
 @dataclass
 class Observation(AgentSize):
     """Observation class for Electric Vehicle agent."""
-
+    
     day: int  # Current day
     price_t: float  # Current price_t
     congestion_signal_t: int  # Current congestion signal
     telecommute: int  # Telecommute status
     price_day: np.array  # Price prevision data for the day
     disconnect_t : int # Wiring status (True if agents been disconnect by the environment)
+    time_day: int # Current time
 
 
 class EVAgent(Agent, AgentInfoMixin):
@@ -113,6 +114,7 @@ class EVAgent(Agent, AgentInfoMixin):
 
         # Initialize models
         self.ev = EVPhysics(config.ev_config)
+        print(config.strategy_config.name)
         self.strategy = Strategy.create(config.strategy_config)
 
         # Convert time parameters to time steps
@@ -134,12 +136,19 @@ class EVAgent(Agent, AgentInfoMixin):
 
         # Initialize observation
         self.observation = Observation(
-            day=0, price_t=0, congestion_signal_t=0, telecommute=0, price_day=np.zeros(self.T), disconnect_t=0
-        )
+            day=0, price_t=0, congestion_signal_t=0, telecommute=0, price_day=np.zeros(self.T), disconnect_t=0,time_day=0,
+        )#
 
         # History tracking
         self.power_history = []
         self.soc_history = []
+
+        # newly added for DRL 
+        self.ins_state = None
+        self.ins_action = None
+        self.ins_reward = None
+        self.ins_next_state = None
+        self.ins_terminate = None
 
     def reset(self, obs) -> np.ndarray:
         """Reset agent state."""
@@ -199,7 +208,7 @@ class EVAgent(Agent, AgentInfoMixin):
                 return 1
         return 0
 
-    def act(self, obs: Observation, milp_action=None) -> float:
+    def act(self, obs: Observation, milp_action=None) -> float:  # dont think MILP is requied already conver in simulation
         """Select an action given the current state following strategy."""
         # Concatenate state and observation into a numpy array
         # observed_context = np.concatenate([self.get_state(), obs])
@@ -209,15 +218,19 @@ class EVAgent(Agent, AgentInfoMixin):
         for element in self.get_observation():
             observed_context.append(element)
 
+        # self.ins_state:
+        self.ins_state = observed_context # but it has more info than required
         if self.config.strategy_config.name == "MILP" or self.config.strategy_config.name == "MILP_Price_Forecast":
             power = self.strategy.act(milp_action) * self.config.ev_config.p_max
         else:
             if self.state.availability == 0:
                 power = 0
             else:
-                power = self.strategy.act(observed_context) * self.config.ev_config.p_max
-
-        self.state.p = power
+                # print(observed_context)
+                action = self.strategy.act(observed_context)
+                power =  action* self.config.ev_config.p_max
+                # print(f'Act: {action, power}')
+        self.state.p = power # what values does the strategies return
 
         return power
 
@@ -251,11 +264,14 @@ class EVAgent(Agent, AgentInfoMixin):
                     reward = +1.0
                 else:
                     reward = ((real_power / self.config.ev_config.p_max) * price_t)
+                    # Normalized the power 
 
         else:
 
             # COMPUTE LOSS (NO CONGESTION PENALTY, PRICE ONLY)
-            reward = ((real_power / self.config.ev_config.p_max) * price_t) 
+            reward = ((real_power / self.config.ev_config.p_max) * price_t)
+
+        # print(f'Reward : {reward} ={real_power} * {price_t}') 
 
 
 
@@ -282,6 +298,10 @@ class EVAgent(Agent, AgentInfoMixin):
         for element in self.get_observation():
             observed_context.append(element)
 
+        # print(self.get_observation())
+        # if self.strategy.name == 'EV_DRL':
+        #     # self.strategy.update(self.ins_state, self.ins_action, self.ins_reward, self.ins_next_state, self.ins_terminate)
+        # else:
         self.strategy.update(observed_context, reward)
 
         # Update state
@@ -295,6 +315,8 @@ class EVAgent(Agent, AgentInfoMixin):
         self.power_history.append(real_power)
         self.soc_history.append(soc)
 
+        
+       
         return (self.get_state(), reward)
 
     def get_history(self) -> Tuple[np.array, np.array]:
@@ -311,7 +333,7 @@ class EVAgent(Agent, AgentInfoMixin):
                 self.state.availability,
                 self.state.t_a,
                 self.state.t_b,
-                self.state.n_charge,
+                self.state.n_charge, # what they refer to 
             ]
         )
 
@@ -324,6 +346,7 @@ class EVAgent(Agent, AgentInfoMixin):
             self.observation.telecommute,
             self.observation.price_day,
             self.observation.disconnect_t,
+
         ]
 
     def get_state_info(self) -> Dict[str, Any]:

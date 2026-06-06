@@ -41,6 +41,7 @@ from strategies.prior_opt import PriorOptConfig
 from strategies.mab_ts import MABTSConfig
 # from strategies.mab_cf_ts import MABCFTS, MABCFTSConfig
 from strategies.milp import MilpConfig
+from strategies.drl import DRLConfig
 from strategies.milp_forecast_price import MilpForecastPriceConfig
 from strategies.milp_optimization import milp_daily_optimization
 from strategies.strategy import StrategyConfig
@@ -54,6 +55,7 @@ STRATEGY_NAMES = [
     "FTPL-IRS-F2",
     "MILP_Price_Forecast",
     "PRIOR OPT",
+    "EV_DRL",
 ]
 
 EV_AGENT_TYPES = ["default","congestion_aware"]
@@ -308,6 +310,8 @@ class Simulation:
             return MilpForecastPriceConfig.default_config()
         elif self.config.strategy_name == "PRIOR OPT":
             return PriorOptConfig.default_config()
+        elif self.config.strategy_name == "EV_DRL":
+            return DRLConfig.default_config()
         else:
             raise ValueError(f"Unknown strategy name: {self.config.strategy_name}")
 
@@ -328,7 +332,7 @@ class Simulation:
         base_dict = self.ev_agent_config.__dict__.copy()
         base_dict["ev_config"] = self.ev_physics_config
         base_dict["strategy_config"] = self.strategy_config
-
+        
         for i in range(self.config.num_ev_agents):
             # Create a NEW copy for each agent
             agent_dict = base_dict.copy()
@@ -370,7 +374,7 @@ class Simulation:
 
         # Create the EV agents
         self.ev_agents = self.create_ev_agents()
-
+        # 
         # Create the agents actions
         self.agents_actions = np.zeros(num_ev_agents)
 
@@ -446,8 +450,10 @@ class Simulation:
 
                 actions_matrix = np.where(p_matrix > 0, 1, 0)
 
+            #no else the how does other strategy work ? [Demand Resposne]
 
-            # Run the simulation for the episode
+
+            # Run the simulation for the episode fro T time period
             for t in range(T):
                 # Observe the current global context
                 self.t = t
@@ -522,9 +528,15 @@ class Simulation:
         self.congestion_list_t = np.zeros(self.num_ev_agents)
         self.disconnection_list_t = np.zeros(self.num_ev_agents)
         for ev_agent in self.ev_agents:
+            # get observation for all ev agent
             ev_obs = self.ev_get_observation(ev_agent)
+            
+            # need to store this obseravation in the list or dataclass
+            ev_agent.ins_state = ev_obs
+
             id = ev_agent.id
             # If MILP, use the precomputed actions
+            # get action 
             if actions_matrix is not None:
                 self.agents_actions[id] = ev_agent.act(
                     obs=ev_obs, milp_action=actions_matrix[self.t, id]
@@ -532,6 +544,8 @@ class Simulation:
             # Otherwise, use the agent's strategy
             else:
                 self.agents_actions[id] = ev_agent.act(obs=ev_obs)
+            
+            # need to store the actions in to list or data class
 
         # Congestion management
         total_power = np.sum(self.agents_actions)
@@ -572,9 +586,20 @@ class Simulation:
         
         # Update the agents' state
         for ev_agent in self.ev_agents:
-            ev_obs = self.ev_get_observation(ev_agent)
-            _, reward = ev_agent.update(obs=ev_obs)
+            ev_obs = self.ev_get_observation(ev_agent) # this observation is next state
 
+            # getting next state s'
+            ev_agent.ins_next_state = ev_obs
+
+            # print(f'Agent {ev_agent.id}->[{ev_obs}]')
+            _, reward = ev_agent.update(obs=ev_obs) # update to get reward not udpdate
+            
+            # need to store reward 
+            ev_agent.ins_reward = reward
+            
+            ev_agent.ins_terminate = False # Not true temination become true when episode termiate [Defining final Reward]
+
+            new_state = ev_obs   
             # Record the state and reward
             self.p_history[self.episode, self.t, ev_agent.id] = ev_agent.state.p
             self.soc_history[self.episode, self.t, ev_agent.id] = ev_agent.state.soc
@@ -586,19 +611,36 @@ class Simulation:
                 self.price_history[self.episode, self.t, ev_agent.id] = self.price_t
             self.action_history[self.episode, self.t, ev_agent.id] = self.agents_actions[ev_agent.id]
 
+            # use this loop than creating a new loop to store infromation 
+            # if stragegy is 'DRL': then get next state, reward and upload in the collector 
 
         self.telecommute_history[self.episode, self.t] = self.telecommute_day
 
-    def ev_get_observation(self, ev_agent: EVAgent):
-        """Get the observation for the EV agent"""
+        # do a for loop in ev_agents and then store the information. 
+
+    def ev_get_observation(self, ev_agent: EVAgent, return_type = None):
+
         return Observation(
+
             day=self.episode,
             price_t=self.price_t,
             congestion_signal_t=self.congestion_list_t[ev_agent.id],
             telecommute=self.telecommute_day,
             price_day=self.price_day,
             disconnect_t=self.disconnection_list_t[ev_agent.id],
+            time_day = self.t
         )
+    
+    def ev_get_observation_array(self, ev_agent: EVAgent):
+        """Return EV observation as a flat NumPy array"""
+        return np.concatenate([
+            np.array([self.episode], dtype=np.float32),
+            np.array([self.price_t], dtype=np.float32),
+            np.array([self.congestion_list_t[ev_agent.id]], dtype=np.float32),
+            np.array([self.telecommute_day], dtype=np.float32),
+            self.price_day.astype(np.float32),
+            np.array([self.disconnection_list_t[ev_agent.id]], dtype=np.float32),
+        ])
 
     # Enhanced save methods
     def save_results(self, results: SimulationResults):
@@ -838,6 +880,8 @@ class Simulation:
             return PriorOptConfig(**config_dict)
         elif strategy_name == "MILP_Price_Forecast":
             return MilpForecastPriceConfig(**config_dict)
+        elif strategy_name == "EV_DRL":
+            return DRLConfig(**config_dict)
         else:
             raise ValueError(f"Unknown strategy name: {strategy_name}")
 

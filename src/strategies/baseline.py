@@ -29,7 +29,9 @@ class Baseline(Strategy):
 
     def act(self, observed_context: np.ndarray) -> int:
         """Select an action given the current context_vector."""
+        # print(observed_context)
         n_charge = int(observed_context[6])
+        # print(n_charge)
         if n_charge == 0:
             return 0
         else:

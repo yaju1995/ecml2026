@@ -1,0 +1,80 @@
+from matplotlib import pyplot as plt
+from simulation.simulation import *
+from utils.plot_analysis import *
+from utils.strategy_comparison import *
+from strategies import *
+from tqdm.notebook import tqdm
+
+
+Strategy.register("GREEDY", Baseline)
+Strategy.register("EV_DRL", DRL)
+
+
+num_ev_agents = np.array([1])
+num_nf_agents = (num_ev_agents*2)/3
+
+
+congestion_limits = (173000.0 / 30.0)*num_ev_agents  # 173000 for 30 EV agent [Reference ?]
+pv_areas = (3000.0 / 30.0)*num_ev_agents # similated based on area [PV rating?]
+
+num_sim_config = len(num_ev_agents)
+
+num_episodes = 1460 # January 2021 - January 2024  # what is number of episodes
+
+centralized_strategies_ca = ["MILP", "MILP_Price_Forecast"]
+decentralized_strategies_ca =["FTPL-IRS-EXP", "FTPL-IRS-F2", "Inde-TS"]
+decentralized_strategies = ["FTPL-IRS-EXP", "FTPL-IRS-F2", "Inde-TS", "GREEDY"]
+
+num_samples = 10
+base_path = "results_ECML2026/"
+
+
+simulation_config_base_dict = {
+    "T_episode_seconds": 24 * 60 * 60,  # 24 hours
+    "dt": 15 * 60,  # 15 minutes
+    "num_ev_agents": 30,  # Number of EV agents    # what is the difference between above num_ev_agents and this one
+    "num_nf_agents": 20, # Number of Non-flexibles agents
+    "pv_area": 3000, #total pv_area (m^2)
+    "num_episodes": num_episodes,  # Number of episodes to run
+    "congestion_limit": 173000,  # One third of the total fleet capacity
+    "part_of_telecommuters": 0.0,
+    "strategy_name": "Baseline",  # Strategy name
+    "ev_agent_type": "congestion_aware",  # Type of EV agents
+    "ev_physics_type": "default",  # Type of EV physics
+    "price_generator": "default",                                        # might have way to update this 
+    "seed": 0,  # Seed for random number generator
+    "verbose": False,  # Flag to print the results
+    "path": base_path,  # Path of the simulation results
+    "save": True,  # Flag to save the results
+}
+
+simulation_config_base_dict["ev_agent_type"] = "congestion_aware"
+# decentralized_strategies_ca =["GREEDY" "FTPL-IRS-EXP","FTPL-IRS-F2","Inde-TS"]
+decentralized_strategies_ca =["GREEDY"]
+decentralized_strategies_ca =["EV_DRL"]
+
+num_samples = 10  # each stategy is sample 10 times and evaluate?
+
+for sim in tqdm(range(num_sim_config)):   # 1 based on above set balue
+    
+    simulation_config_base_dict["num_ev_agents"] = num_ev_agents[sim]
+    simulation_config_base_dict["num_nf_agents"] = num_nf_agents[sim]
+    simulation_config_base_dict["pv_area"] = pv_areas[sim]
+    simulation_config_base_dict["congestion_limit"] = congestion_limits[sim]
+    if num_ev_agents[sim] > 480:
+        num_samples = 2
+    for strategy in tqdm(decentralized_strategies_ca, leave=False, desc="Strategies"):
+       
+        for sample in tqdm(range(num_samples), leave=False, desc="Samples"):
+            simulation_config_base_dict["strategy_name"] = strategy
+            simulation_config_base_dict["seed"] = sample
+            full_path = base_path + f"CA/EVs_{num_ev_agents[sim]}/" + strategy + "/" + str(sample) + "/"
+            simulation_config_base_dict["path"] = full_path
+            
+            simulation_config = SimulationConfig(**simulation_config_base_dict)
+            
+            simulation = Simulation(simulation_config)
+            print(full_path)
+            results = simulation.run()
+
+print("Decentralized CA Done!")
