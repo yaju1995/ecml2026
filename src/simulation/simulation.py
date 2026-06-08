@@ -345,6 +345,7 @@ class Simulation:
 
             ev_agent_config = EVAgentConfig(**agent_dict)
             ev_agent = EVAgent(ev_agent_config)
+
             if ev_agent.strategy.name == "PRIOR OPT":
                 ev_agent.strategy.init_reward_list(self.price_f6pm_data)
             ev_agents.append(ev_agent)
@@ -628,7 +629,6 @@ class Simulation:
             telecommute=self.telecommute_day,
             price_day=self.price_day,
             disconnect_t=self.disconnection_list_t[ev_agent.id],
-            time_day = self.t
         )
     
     def ev_get_observation_array(self, ev_agent: EVAgent):

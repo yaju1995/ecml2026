@@ -51,7 +51,7 @@ simulation_config_base_dict = {
 simulation_config_base_dict["ev_agent_type"] = "congestion_aware"
 # decentralized_strategies_ca =["GREEDY" "FTPL-IRS-EXP","FTPL-IRS-F2","Inde-TS"]
 decentralized_strategies_ca =["GREEDY"]
-decentralized_strategies_ca =["EV_DRL"]
+# decentralized_strategies_ca =["EV_DRL"]
 
 num_samples = 10  # each stategy is sample 10 times and evaluate?
 

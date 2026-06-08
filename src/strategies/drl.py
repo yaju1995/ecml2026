@@ -1,9 +1,25 @@
 from dataclasses import dataclass
 
 import numpy as np
-
+from utils.multi_plotter import MultiLivePlotter
 from strategies.strategy import Strategy, StrategyConfig
 from DRL import DQNAgent, DQNConfig, DDPGAgent,DDPGConfig
+
+def minute_to_sin_cos(value, resolution):
+    """
+    Convert a time index (0 .. resolution-1) into sin/cos cyclical encoding.
+    
+    Parameters
+    ----------
+    value : int or array-like
+        The timestep index (e.g., minute index).
+    resolution : int
+        Number of steps in one full cycle (e.g., 96 for 15-min steps).
+    """
+    value = np.asarray(value)
+    angle = 2 * np.pi * (value / resolution)
+    return np.sin(angle), np.cos(angle)
+
 @dataclass
 class DRLConfig(StrategyConfig):
     """Configuration class for DRL charging Strategy parameters."""
@@ -22,7 +38,7 @@ class DRLConfig(StrategyConfig):
             D= 400,    
             name = "EV_DRL", #
             drl_config = DQNConfig(),  # Configuration
-            obs_dim = 6,
+            obs_dim = 7,
             act_dim = 2,
         )
 
@@ -44,14 +60,26 @@ class DRL(Strategy):
         self.reward = None
         self.next_state = None
         self.terminate = None
+
+        # reward evaluation
+        self.avg_reward = 0
+        self.sum_reward = 0
+        self.steps =0
+        
+        # plotter
+        self.plotter = MultiLivePlotter(n_plots=1)
         
     def update(self, observed_context, reward):
         """Update strategy state given the observed transition."""
         next_state = self._filter_obs(observed_context)
         t = observed_context[0]
         self.next_state = next_state
-        self.reward = reward
-        print(f'time: {t} : {self.reward}')
+        self.reward = - reward  # to maximized the reward
+        self.sum_reward += self.reward
+        self.steps +=1
+        self.avg_reward = self.sum_reward/self.steps
+        # self.plotter.update([self.avg_reward])
+        # print(f'time: {t} : {self.avg_reward}')
         if self.state is not None and self.action is not None:
             # print(self.state, self.action,self.reward, self.next_state)
 
@@ -72,9 +100,6 @@ class DRL(Strategy):
         # print(self.action)
         return self.action
     
-    def store_transition(self, state, action, reward, state_next):
-        pass
-    
     def save(self, path):
         self.DRL_Agent.save(path)
     
@@ -94,24 +119,31 @@ class DRL(Strategy):
     #     return state
     def _filter_obs(self, context_vector) -> np.ndarray:
 
+        sin_t, cos_t = minute_to_sin_cos(context_vector[0],96)
         state = np.array([
-            context_vector[0],   # Current timestep
+            # context_vector[0],   # Current timestep
+            sin_t,
+            cos_t,
             context_vector[1],   # Current power
             context_vector[2],   # Current state of charge
             # context_vector[3], # Current availability status
             # context_vector[4], # Arrival time
-            context_vector[5],   # Departure time
+            context_vector[5],   # Departure time #in minutes
             # context_vector[6], # Number of instants needed to charge
-            context_vector[7],   # Current day
-            # context_vector[8], # Current price_t
+            # context_vector[7],   # Current day
+            context_vector[8],   # Current price_t
             context_vector[9],   # Current congestion signal
             # context_vector[10],# Telecommute status
             # context_vector[11],# Price prevision data for the day
             # context_vector[12],# Wiring status
-            # context_vector[13],# Current time
         ], dtype=float)
 
         return state
+
+    
     def reset(self, observed_context: list):
             """Reset strategy state."""
+        # reset the DRL 
+        # Reset the memory
+
 Strategy.register("EV_DRL", DRL)

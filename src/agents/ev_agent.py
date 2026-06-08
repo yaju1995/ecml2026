@@ -99,7 +99,6 @@ class Observation(AgentSize):
     telecommute: int  # Telecommute status
     price_day: np.array  # Price prevision data for the day
     disconnect_t : int # Wiring status (True if agents been disconnect by the environment)
-    time_day: int # Current time
 
 
 class EVAgent(Agent, AgentInfoMixin):
@@ -136,7 +135,7 @@ class EVAgent(Agent, AgentInfoMixin):
 
         # Initialize observation
         self.observation = Observation(
-            day=0, price_t=0, congestion_signal_t=0, telecommute=0, price_day=np.zeros(self.T), disconnect_t=0,time_day=0,
+            day=0, price_t=0, congestion_signal_t=0, telecommute=0, price_day=np.zeros(self.T), disconnect_t=0,
         )#
 
         # History tracking
@@ -302,6 +301,7 @@ class EVAgent(Agent, AgentInfoMixin):
         # if self.strategy.name == 'EV_DRL':
         #     # self.strategy.update(self.ins_state, self.ins_action, self.ins_reward, self.ins_next_state, self.ins_terminate)
         # else:
+        # print(f'EV ID: {self.id}')
         self.strategy.update(observed_context, reward)
 
         # Update state
