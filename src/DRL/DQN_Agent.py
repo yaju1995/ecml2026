@@ -180,7 +180,7 @@ class DQNAgent:
         if len(self.buffer) < batch_size:
             return None
 
-        print('Updating NN!!')
+        # print('Updating NN!!')
         states, actions, rewards, next_states, dones = self.buffer.sample(batch_size)
 
         states = torch.tensor(states, dtype=torch.float32, device=self.device)
