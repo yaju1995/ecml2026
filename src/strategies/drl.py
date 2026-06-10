@@ -75,9 +75,11 @@ class DRL(Strategy):
         t = observed_context[0]
         self.next_state = next_state
         self.reward = - reward  # to maximized the reward
+        # Tracking reward
         self.sum_reward += self.reward
         self.steps +=1
         self.avg_reward = self.sum_reward/self.steps
+        
         # self.plotter.update([self.avg_reward])
         # print(f'time: {t} : {self.avg_reward}')
         if self.state is not None and self.action is not None:
@@ -106,17 +108,6 @@ class DRL(Strategy):
     def load(self, path):
         self.DRL_Agent.load(path)
     
-    # def _get_obs_numpy(self, context_vector)->np.array:
-    #     state = np.concatenate([
-    #         np.array([context_vector.day], dtype=np.float32),
-    #         np.array([context_vector.price_t], dtype=np.float32),
-    #         np.array([context_vector.congestion_signal_t], dtype=np.float32),
-    #         np.array([context_vector.telecommute], dtype=np.float32),
-    #         context_vector.price_day.astype(np.float32),
-    #         np.array([context_vector.disconnect_t], dtype=np.float32),
-    #     ])
-
-    #     return state
     def _filter_obs(self, context_vector) -> np.ndarray:
 
         sin_t, cos_t = minute_to_sin_cos(context_vector[0],96)

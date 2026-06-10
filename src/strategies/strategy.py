@@ -57,12 +57,12 @@ class Strategy(ABC):
         
         """Register a new strategy implementation."""
         cls._strategy_registry[name] = strategy_class
-        print(f"Strategy Register: {cls._strategy_registry[name]}")
+        # print(f"Strategy Register: {cls._strategy_registry[name]}")
 
     @classmethod
     def create(cls, config: StrategyConfig) -> "Strategy":
         """Factory method to create the appropriate strategy."""
-        print(cls._strategy_registry)
+        # print(cls._strategy_registry)
         if config.name not in cls._strategy_registry:
             
             raise ValueError(f"Unknown strategy type: {config.name}")

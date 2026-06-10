@@ -81,7 +81,7 @@ class StrategyComparison:
             "Inde-TS",
             "Inde-TS-CA",
             "MILP_Price_Forecast",
-            "DRL-DQN",
+            "EV_DRL",
         ]
 
         self.markers = markers or [

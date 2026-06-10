@@ -113,7 +113,7 @@ class EVAgent(Agent, AgentInfoMixin):
 
         # Initialize models
         self.ev = EVPhysics(config.ev_config)
-        print(config.strategy_config.name)
+        # print(config.strategy_config.name)
         self.strategy = Strategy.create(config.strategy_config)
 
         # Convert time parameters to time steps
