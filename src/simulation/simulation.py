@@ -2,13 +2,43 @@ import datetime
 import os
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict, is_dataclass
 from typing import List, Optional
 
 import h5py
 import numpy as np
 import pandas as pd
 
+# HELPER FOR SERIALIZATION OF RESULTS :
+
+def make_json_serializable(obj):
+    """Recursively convert dataclasses, objects, numpy values, tuples into JSON-safe values."""
+
+    if is_dataclass(obj):
+        return make_json_serializable(asdict(obj))
+
+    if isinstance(obj, dict):
+        return {str(k): make_json_serializable(v) for k, v in obj.items()}
+
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(v) for v in obj]
+
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+
+    if isinstance(obj, np.integer):
+        return int(obj)
+
+    if isinstance(obj, np.floating):
+        return float(obj)
+
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+
+    if hasattr(obj, "__dict__"):
+        return make_json_serializable(obj.__dict__)
+
+    return obj
 
 def is_notebook():
     try:
@@ -34,6 +64,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from agents.ev_agent import EVAgent, EVAgentConfig, Observation
+from DRL.DQN_Agent import DQNConfig
 from physics.ev_physics import  EVPhysicsConfig
 from strategies.baseline import  BaselineConfig
 from strategies.mab_ftpl_R import MABFTPLConfig
@@ -311,7 +342,9 @@ class Simulation:
         elif self.config.strategy_name == "PRIOR OPT":
             return PriorOptConfig.default_config()
         elif self.config.strategy_name == "EV_DRL":
-            return DRLConfig.default_config()
+            cfg = DRLConfig.default_config()
+            cfg.seed = self.config.seed
+            return cfg  
         else:
             raise ValueError(f"Unknown strategy name: {self.config.strategy_name}")
 
@@ -328,29 +361,39 @@ class Simulation:
             print("Creating the EV agents...")
 
         ev_agents = []
+
         # Create a base dictionary outside the loop
         base_dict = self.ev_agent_config.__dict__.copy()
         base_dict["ev_config"] = self.ev_physics_config
-        base_dict["strategy_config"] = self.strategy_config
-        
+
         for i in range(self.config.num_ev_agents):
             # Create a NEW copy for each agent
             agent_dict = base_dict.copy()
             agent_dict["id"] = i  # Set unique ID
 
+            # IMPORTANT:
+            # For EV_DRL, give each agent its own DRLConfig with its own seed.
+            # Otherwise all DQN agents are initialized with the same neural net weights.
+            if self.config.strategy_name == "EV_DRL":
+                strategy_config = DRLConfig.default_config()
+                strategy_config.seed = int(self.config.seed) * 100_000 + int(i)
+                agent_dict["strategy_config"] = strategy_config
+            else:
+                agent_dict["strategy_config"] = self.strategy_config
+
             if i < self.config.num_ev_agents * self.config.part_of_telecommuters:
                 agent_dict["telecommuting_days"] = [1, 3]
             else:
-                agent_dict["telecommuting_days"] = []  # Ensure non-telecommuters have empty list
+                agent_dict["telecommuting_days"] = []
 
             ev_agent_config = EVAgentConfig(**agent_dict)
             ev_agent = EVAgent(ev_agent_config)
 
             if ev_agent.strategy.name == "PRIOR OPT":
                 ev_agent.strategy.init_reward_list(self.price_f6pm_data)
+
             ev_agents.append(ev_agent)
 
-        
         return ev_agents
 
     def delete_ev_agents(self):
@@ -680,7 +723,7 @@ class Simulation:
                         hasattr(np.array(value), "dtype") and np.array(value).dtype == "O"
                     ):
                         # Convert complex objects to JSON
-                        f.create_dataset(key, data=json.dumps(value))
+                        f.create_dataset(key, data=json.dumps(make_json_serializable(value)))                        
                         f[key].attrs["json_serialized"] = True
                     else:
                         # Store simple values directly
@@ -712,20 +755,17 @@ class Simulation:
                             agent_group[key].attrs["json_serialized"] = True
                             agent_group[key].attrs["object_type"] = "EVPhysicsConfig"
                         elif key == "strategy_config" and hasattr(value, "__dict__"):
-                            # Handle nested StrategyConfig
-                            strategy_config_dict = StrategyConfig.get_config_dict(value)
+                            strategy_config_dict = make_json_serializable(value)
+
                             agent_group.create_dataset(key, data=json.dumps(strategy_config_dict))
                             agent_group[key].attrs["json_serialized"] = True
                             agent_group[key].attrs["object_type"] = value.__class__.__name__
+
                         elif isinstance(value, (list, dict)) or (
                             hasattr(np.array(value), "dtype") and np.array(value).dtype == "O"
                         ):
-                            # Handle complex objects
-                            agent_group.create_dataset(key, data=json.dumps(value))
+                            agent_group.create_dataset(key, data=json.dumps(make_json_serializable(value)))
                             agent_group[key].attrs["json_serialized"] = True
-                        else:
-                            # Handle simple values
-                            agent_group.create_dataset(key, data=value)
 
         except Exception as e:
             print(f"Error saving agent configurations: {e}")
@@ -881,6 +921,8 @@ class Simulation:
         elif strategy_name == "MILP_Price_Forecast":
             return MilpForecastPriceConfig(**config_dict)
         elif strategy_name == "EV_DRL":
+            if isinstance(config_dict.get("drl_config"), dict):
+                config_dict["drl_config"] = DQNConfig(**config_dict["drl_config"])
             return DRLConfig(**config_dict)
         else:
             raise ValueError(f"Unknown strategy name: {strategy_name}")
