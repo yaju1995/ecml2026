@@ -657,7 +657,7 @@ class StrategyComparison:
                     sim = Simulation(sim_cfg)
 
                     results = sim.load_results()
-                    agents_df = sim.load_agents_configs_df()
+                    agents_df = self._load_ev_p_max_from_agent_configs_h5(sim_path)
 
                 except Exception as e:
                     skipped_load_error += 1
@@ -801,8 +801,7 @@ class StrategyComparison:
                 rep_path = os.path.join(self.base_path, strategy, str(rep_found))
                 rep_cfg = load_simulation_config(rep_path, verbose=False)
                 rep_cfg.path = rep_path
-                rep_sim = Simulation(rep_cfg)
-                rep_agents_df = rep_sim.load_agents_configs_df()
+                rep_agents_df = self._load_ev_p_max_from_agent_configs_h5(rep_path)
 
                 if rep_agents_df is not None and "ev_p_max" in rep_agents_df.columns:
                     rep_ev_p_max = pd.to_numeric(rep_agents_df["ev_p_max"], errors="coerce").to_numpy()
@@ -818,7 +817,7 @@ class StrategyComparison:
 
                 strategy_name = correct_strategy_name(strategy, sim_cfgs_dict, results_dict_dummy, ev_dict)
 
-                del rep_sim, rep_agents_df, rep_cfg, rep_ev_cfg
+                del rep_agents_df, rep_cfg, rep_ev_cfg
                 gc.collect()
 
             if band is None:
@@ -1083,7 +1082,7 @@ class StrategyComparison:
         ax.set_ylabel(ylabel, fontsize=axis_label_fontsize)
         ax.tick_params(axis="both", labelsize=tick_fontsize)
         ax.set_xlim(xmin=0)
-        ax.set_ylim(ymin=0,ymax=ylim)
+        # ax.set_ylim(ymin=0,ymax=ylim)
 
         # ---- Title handling (removed by default)
         if show_title:
@@ -1174,6 +1173,51 @@ class StrategyComparison:
         return float(fleet_curve[-1])
 
 
+
+    def _load_ev_p_max_from_agent_configs_h5(self, sim_path: str):
+        """
+        Lightweight loader for EV p_max values from agent_configs.h5.
+
+        This avoids sim.load_agents_configs_df(), which reconstructs full
+        EVAgentConfig objects and can fail for old/incomplete agent config files.
+        The disk metrics only need ev_p_max, so reading ev_config directly is safer.
+        """
+        import h5py
+        import json
+        import os
+        import numpy as np
+        import pandas as pd
+
+        fp = os.path.join(sim_path, "agent_configs.h5")
+        if not os.path.exists(fp):
+            return None
+
+        ev_p_max_values = []
+
+        with h5py.File(fp, "r") as f:
+            for agent_key in f.keys():
+                agent_group = f[agent_key]
+
+                if "ev_config" not in agent_group:
+                    continue
+
+                raw = agent_group["ev_config"][()]
+
+                if isinstance(raw, bytes):
+                    raw = raw.decode()
+
+                if isinstance(raw, str):
+                    try:
+                        ev_cfg = json.loads(raw)
+                        ev_p_max_values.append(ev_cfg.get("p_max", np.nan))
+                    except Exception:
+                        ev_p_max_values.append(np.nan)
+
+        if len(ev_p_max_values) == 0:
+            return None
+
+        return pd.DataFrame({"ev_p_max": ev_p_max_values})
+
     @staticmethod
     def _congestion_metrics_old_from_triplet(results, sim_cfg, agents_df, day_start=0, day_end=None, clip_capacity_zero=True):
         """
@@ -1257,13 +1301,8 @@ class StrategyComparison:
         try:
             cfg = load_simulation_config(rep_path, verbose=False)
             cfg.path = rep_path
-            sim = Simulation(cfg)
-            agents_df = sim.load_agents_configs_df()
+            agents_df = self._load_ev_p_max_from_agent_configs_h5(rep_path)
         except Exception:
-            try:
-                del sim
-            except Exception:
-                pass
             gc.collect()
             return base
 
@@ -1280,7 +1319,7 @@ class StrategyComparison:
             if base in ["FTPL-IRS", "Inde-TS", "FTPL-IRS-F2", "FTPL-IRS-EXP"]:
                 base = base + "-CA"
 
-        del sim, cfg, agents_df
+        del cfg, agents_df
         gc.collect()
         return base
 
@@ -1344,7 +1383,7 @@ class StrategyComparison:
                     sim = Simulation(sim_cfg)
 
                     results = sim.load_results()
-                    agents_df = sim.load_agents_configs_df()
+                    agents_df = self._load_ev_p_max_from_agent_configs_h5(sim_path)
 
                     # price scalar
                     pv = self._normalized_price_final_value_from_results(
@@ -1460,7 +1499,347 @@ class StrategyComparison:
             print(f"Saved: {outpath}")
 
         return df
+    def plot_final_soc_gap_from_disk(
+    self,
+    sample_indices=None,
+    episode_start: int = 0,
+    episode_end=None,
+    window_size: int = 1,
+    band: str = "quantile",      # "std", "quantile", "minmax", or None
+    quantiles=(0.10, 0.90),
+    aggregate_agents: bool = False,
+    figsize=(10, 6),
+    save_path="results_ECML2026_bis/images",
+    show: bool = True,
+    verbose: bool = False,
+    legend_fontsize: int = 14,
+    axis_label_fontsize: int = 16,
+    tick_fontsize: int = 14,
+    show_title: bool = False,
+    title: str = None,
+    ):
+        """
+        Plot the evolution of the final SoC gap to target SoC.
 
+        Gap definition:
+            gap[episode, agent] = final_soc[episode, agent] - soc_target[episode, agent]
+
+        final_soc comes from:
+            results.soc_history[:, -1, :]
+
+        target_soc comes from:
+            results.soc_target_history.T
+
+        If aggregate_agents=True:
+            For each sample and episode, average the gap over agents first.
+            The band then shows variability across samples.
+
+        If aggregate_agents=False:
+            Pool all agent-level gaps across samples for each episode.
+            The band then shows the distribution of individual-agent gaps around 0.
+        """
+
+        import os
+        import gc
+        import numpy as np
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        from tqdm import tqdm
+
+        def _samples_to_iter(strategy_key: str):
+            if sample_indices is not None:
+                return list(sample_indices)
+            return list(range(int(self.strategies_and_samples_dict.get(strategy_key, 0))))
+
+        def _safe_strategy_label(strategy_key: str) -> str:
+            if strategy_key == "GREEDY":
+                return "Naive"
+            if strategy_key == "MILP_Price_Forecast":
+                return "ILP-PF"
+            return strategy_key
+
+        gap_by_strategy = {s: [] for s in self.strategies}
+
+        strategies_plot_order = (
+            [s for s in self.strategy_order if s in self.strategies]
+            + [s for s in self.strategies if s not in self.strategy_order]
+        )
+
+        for strategy in tqdm(
+            strategies_plot_order,
+            desc=f"Strategies (N={self.n_agents})",
+            leave=True,
+        ):
+            for sample_idx in tqdm(
+                _samples_to_iter(strategy),
+                desc=f"{strategy} samples",
+                leave=False,
+            ):
+                sim_path = os.path.join(self.base_path, strategy, str(sample_idx))
+
+                if not (
+                    os.path.exists(os.path.join(sim_path, "simulation_parameters.h5"))
+                    and os.path.exists(os.path.join(sim_path, "simulation_results.h5"))
+                ):
+                    if verbose:
+                        print(f"[WARN] missing files for {strategy}/{sample_idx}")
+                    continue
+
+                try:
+                    sim_cfg = load_simulation_config(sim_path, verbose=False)
+                    sim_cfg.path = sim_path
+
+                    sim = Simulation(sim_cfg)
+                    results = sim.load_results()
+
+                    if not hasattr(results, "soc_history"):
+                        if verbose:
+                            print(f"[WARN] missing soc_history for {strategy}/{sample_idx}")
+                        del results, sim, sim_cfg
+                        gc.collect()
+                        continue
+
+                    if not hasattr(results, "soc_target_history"):
+                        if verbose:
+                            print(f"[WARN] missing soc_target_history for {strategy}/{sample_idx}")
+                        del results, sim, sim_cfg
+                        gc.collect()
+                        continue
+
+                    soc_history = results.soc_history
+                    soc_target_history = results.soc_target_history
+
+                    if soc_history.ndim != 3:
+                        if verbose:
+                            print(
+                                f"[WARN] bad soc_history shape for {strategy}/{sample_idx}: "
+                                f"{soc_history.shape}"
+                            )
+                        del results, sim, sim_cfg
+                        gc.collect()
+                        continue
+
+                    D, T, A = soc_history.shape
+
+                    # Expected: soc_target_history shape = (A, D)
+                    # Convert to (D, A)
+                    if soc_target_history.shape == (A, D):
+                        target_soc = soc_target_history.T
+                    elif soc_target_history.shape == (D, A):
+                        target_soc = soc_target_history
+                    else:
+                        if verbose:
+                            print(
+                                f"[WARN] incompatible soc_target_history shape for "
+                                f"{strategy}/{sample_idx}: {soc_target_history.shape}, "
+                                f"expected {(A, D)} or {(D, A)}"
+                            )
+                        del results, sim, sim_cfg
+                        gc.collect()
+                        continue
+
+                    e0 = max(0, int(episode_start))
+                    e1 = D if episode_end is None else min(D, int(episode_end))
+
+                    if e0 >= e1:
+                        if verbose:
+                            print(f"[WARN] empty episode window for {strategy}/{sample_idx}")
+                        del results, sim, sim_cfg
+                        gc.collect()
+                        continue
+
+                    final_soc = soc_history[e0:e1, -1, :]   # (Ew, A)
+                    target_soc = target_soc[e0:e1, :]        # (Ew, A)
+
+                    gap = final_soc - target_soc             # (Ew, A)
+
+                    if aggregate_agents:
+                        # One value per episode per sample: average gap across agents
+                        sample_curve = np.nanmean(gap, axis=1)   # (Ew,)
+                        gap_by_strategy[strategy].append(sample_curve)
+                    else:
+                        # Keep individual-agent gaps
+                        gap_by_strategy[strategy].append(gap)    # (Ew, A)
+
+                    del results, sim, sim_cfg
+                    gc.collect()
+
+                except Exception as e:
+                    if verbose:
+                        print(f"[WARN] skip {strategy}/{sample_idx}: {repr(e)}")
+
+                    try:
+                        del results
+                    except Exception:
+                        pass
+                    try:
+                        del sim
+                    except Exception:
+                        pass
+                    try:
+                        del sim_cfg
+                    except Exception:
+                        pass
+
+                    gc.collect()
+                    continue
+
+        plotted_any = any(len(v) > 0 for v in gap_by_strategy.values())
+
+        if not plotted_any:
+            print("No final SoC gap data available.")
+            return None
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        band_tag = "noband" if band is None else band
+
+        for strategy in strategies_plot_order:
+            curves = gap_by_strategy.get(strategy, [])
+
+            if len(curves) == 0:
+                continue
+
+            if aggregate_agents:
+                # curves: list of (Ew,)
+                minE = min(len(c) for c in curves)
+                mat = np.stack([c[:minE] for c in curves], axis=0)  # (S, E)
+
+            else:
+                # curves: list of (Ew, A)
+                minE = min(c.shape[0] for c in curves)
+
+                pooled_per_episode = []
+
+                for e in range(minE):
+                    vals_e = []
+                    for c in curves:
+                        vals_e.append(c[e, :])
+                    vals_e = np.concatenate(vals_e, axis=0)
+                    vals_e = vals_e[np.isfinite(vals_e)]
+                    pooled_per_episode.append(vals_e)
+
+                max_count = max(len(v) for v in pooled_per_episode)
+                mat = np.full((max_count, minE), np.nan)
+
+                for e, vals in enumerate(pooled_per_episode):
+                    mat[:len(vals), e] = vals
+
+            episodes = np.arange(int(episode_start), int(episode_start) + int(minE))
+
+            mean_gap = np.nanmean(mat, axis=0)
+
+            if window_size is not None and int(window_size) > 1:
+                mean_plot = (
+                    pd.Series(mean_gap)
+                    .rolling(window=int(window_size), center=True, min_periods=1)
+                    .mean()
+                    .to_numpy()
+                )
+            else:
+                mean_plot = mean_gap
+
+            if band == "std":
+                spread = np.nanstd(mat, axis=0)
+                low = mean_gap - spread
+                high = mean_gap + spread
+                band_tag = "std"
+
+            elif band == "quantile":
+                q_low, q_high = quantiles
+                low = np.nanquantile(mat, q_low, axis=0)
+                high = np.nanquantile(mat, q_high, axis=0)
+                band_tag = f"q{int(q_low * 100)}_q{int(q_high * 100)}"
+
+            elif band == "minmax":
+                low = np.nanmin(mat, axis=0)
+                high = np.nanmax(mat, axis=0)
+                band_tag = "minmax"
+
+            elif band is None:
+                low = None
+                high = None
+                band_tag = "noband"
+
+            else:
+                raise ValueError("band must be 'std', 'quantile', 'minmax', or None")
+
+            color = self.strategy_colors.get(strategy, None)
+            ls = self.strategy_linestyle.get(strategy, "-")
+            label = _safe_strategy_label(strategy)
+
+            if band is not None:
+                ax.fill_between(
+                    episodes,
+                    low,
+                    high,
+                    alpha=0.2,
+                    color=color,
+                    linewidth=0,
+                )
+
+            line, = ax.plot(
+                episodes,
+                mean_plot,
+                linewidth=2.5,
+                color=color,
+                label=label,
+            )
+            line.set_linestyle(ls)
+
+        # Reference: target reached exactly
+        ax.axhline(
+            0.0,
+            color="black",
+            linestyle="--",
+            linewidth=1.5,
+            alpha=0.8,
+            label="Target SoC",
+        )
+
+        ax.set_xlabel("Episode", fontsize=axis_label_fontsize)
+
+        if aggregate_agents:
+            ylabel = "Average final SoC gap to target"
+        else:
+            ylabel = "Final SoC gap to target"
+
+        ax.set_ylabel(ylabel, fontsize=axis_label_fontsize)
+        ax.tick_params(axis="both", labelsize=tick_fontsize)
+
+        if show_title:
+            if title is None:
+                agg_text = "fleet-average gap" if aggregate_agents else "agent-level gap distribution"
+                title = (
+                    f"Final SoC gap to target — {agg_text}\n"
+                    f"N={self.n_agents} agents — Episodes {episode_start}–{episode_end}"
+                )
+            ax.set_title(title, fontsize=axis_label_fontsize)
+
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=legend_fontsize, framealpha=0.7, ncol=1)
+
+        fig.tight_layout()
+
+        if save_path is not None:
+            os.makedirs(save_path, exist_ok=True)
+
+            ep_end_tag = episode_end if episode_end is not None else "end"
+            agg_tag = "agentavg" if aggregate_agents else "agentdist"
+
+            filename = (
+                f"final_soc_gap_N{self.n_agents}_ep{episode_start}_{ep_end_tag}_"
+                f"{agg_tag}_{band_tag}.pdf"
+            )
+
+            fullpath = os.path.join(save_path, filename)
+            fig.savefig(fullpath, format="pdf", bbox_inches="tight")
+            print(f"Saved: {fullpath}")
+
+        if show:
+            plt.show()
+
+        return fig, ax
 def find_strategies_and_samples(path, verbose=True):
     """ Return a dictionary with strategies as keys and number of samples as values """
     strategies = {}
@@ -1517,6 +1896,7 @@ def ev_series_to_agent_config(ev_series: pd.Series) -> EVAgentConfig:
     )
 
     return agent_config
+
 
 def correct_strategy_name(strategy, simulation_configs_dict, results_dicts, ev_agents_dict):
         strategy_name = strategy

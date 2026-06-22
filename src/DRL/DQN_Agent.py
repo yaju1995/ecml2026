@@ -119,7 +119,7 @@ class DQNConfig:
 # DQN Agent
 # ---------------------------
 class DQNAgent:
-    def __init__(self, name, obs_dim: int, n_actions: int, cfg: DQNConfig, seed:int):
+    def __init__(self, name, obs_dim: int, n_actions: int, cfg: DQNConfig):
         self.name = name
         self.cfg = cfg
         self.device = cfg.device
