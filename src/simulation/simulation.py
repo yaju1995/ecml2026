@@ -64,7 +64,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from agents.ev_agent import EVAgent, EVAgentConfig, Observation
-from DRL.DQN_Agent import DQNConfig
+from DRL.DQN_Agent import DQNConfig, ReplayBuffer
 from physics.ev_physics import  EVPhysicsConfig
 from strategies.baseline import  BaselineConfig
 from strategies.mab_ftpl_R import MABFTPLConfig
@@ -72,7 +72,7 @@ from strategies.prior_opt import PriorOptConfig
 from strategies.mab_ts import MABTSConfig
 # from strategies.mab_cf_ts import MABCFTS, MABCFTSConfig
 from strategies.milp import MilpConfig
-from strategies.drl import DRLConfig
+from strategies.dqn import DRLConfig
 from strategies.milp_forecast_price import MilpForecastPriceConfig
 from strategies.milp_optimization import milp_daily_optimization
 from strategies.strategy import StrategyConfig
@@ -86,7 +86,7 @@ STRATEGY_NAMES = [
     "FTPL-IRS-F2",
     "MILP_Price_Forecast",
     "PRIOR OPT",
-    "EV_DRL",
+    "DQN",
 ]
 
 EV_AGENT_TYPES = ["default","congestion_aware"]
@@ -341,7 +341,7 @@ class Simulation:
             return MilpForecastPriceConfig.default_config()
         elif self.config.strategy_name == "PRIOR OPT":
             return PriorOptConfig.default_config()
-        elif self.config.strategy_name == "EV_DRL":
+        elif self.config.strategy_name == "DQN":
             cfg = DRLConfig.default_config()
             cfg.seed = self.config.seed
             return cfg  
@@ -366,16 +366,21 @@ class Simulation:
         base_dict = self.ev_agent_config.__dict__.copy()
         base_dict["ev_config"] = self.ev_physics_config
 
+       
+
         for i in range(self.config.num_ev_agents):
             # Create a NEW copy for each agent
             agent_dict = base_dict.copy()
             agent_dict["id"] = i  # Set unique ID
 
             # IMPORTANT:
-            # For EV_DRL, give each agent its own DRLConfig with its own seed.
+            # For DQN, give each agent its own DRLConfig with its own seed.
             # Otherwise all DQN agents are initialized with the same neural net weights.
-            if self.config.strategy_name == "EV_DRL":
+            if self.config.strategy_name == "DQN":
                 strategy_config = DRLConfig.default_config()
+                if strategy_config.central_buffer_mode is True:
+                    central_memory = ReplayBuffer()
+                    strategy_config.replay_buffer = central_memory # switching to central buffer
                 strategy_config.seed = int(self.config.seed) * 100_000 + int(i)
                 agent_dict["strategy_config"] = strategy_config
             else:
@@ -731,6 +736,16 @@ class Simulation:
         except Exception as e:
             print(f"Error saving simulation parameters: {e}")
             raise
+    
+    def save_agent_strategy(self):
+        for i, ev_agent in enumerate(self.ev_agents):
+            ev_agent.strategy.save()
+
+
+    def load_agent_strategy(self):
+        for i, ev_agent in enumerate(self.ev_agents):
+            ev_agent.strategy.load()
+
 
     def save_agent_config(self):
         """Save all individual agent configurations"""
@@ -920,7 +935,7 @@ class Simulation:
             return PriorOptConfig(**config_dict)
         elif strategy_name == "MILP_Price_Forecast":
             return MilpForecastPriceConfig(**config_dict)
-        elif strategy_name == "EV_DRL":
+        elif strategy_name == "DQN":
             if isinstance(config_dict.get("drl_config"), dict):
                 config_dict["drl_config"] = DQNConfig(**config_dict["drl_config"])
             return DRLConfig(**config_dict)

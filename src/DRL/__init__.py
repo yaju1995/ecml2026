@@ -1,5 +1,5 @@
 from .DDPG_Agent_multistep import DDPGAgent
 from .DDPG_Agent_multistep import DDPGConfig
-from .DQN_Agent import DQNConfig, DQNAgent
+from .DQN_Agent import DQNConfig, DQNAgent, ReplayBuffer
 
-__all__ = ["DDPGAgnet","DDPGConfig", "DQNAgent", "DQNConfig"]
+__all__ = ["DDPGAgnet","DDPGConfig", "DQNAgent", "DQNConfig", "ReplayBuffer"]

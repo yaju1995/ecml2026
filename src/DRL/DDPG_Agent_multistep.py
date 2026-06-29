@@ -237,7 +237,7 @@ class DDPGConfig:
     seed: Optional[int] = 0
     a_max: Optional[float] = 1.0
     a_min: Optional[float] = -1.0
-
+    replay_buffer: Optional[ReplayBuffer] = None # For centralized Replay buffer
 
 # ---------------------------
 # DDPG Agent (generic target works for both)
@@ -250,7 +250,7 @@ class DDPGAgent:
         act_dim: int,
         cfg: DDPGConfig,
         return_mode: ReturnMode = "nstep",
-        n_step: int = 4
+        n_step: int = 1
     ):
         self.name = name
         self.cfg = cfg

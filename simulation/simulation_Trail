@@ -7,7 +7,7 @@ from tqdm.notebook import tqdm
 
 
 Strategy.register("GREEDY", Baseline)
-Strategy.register("EV_DRL", DRL)
+Strategy.register("DQN", DRL)
 
 
 num_ev_agents = np.array([1])
@@ -50,7 +50,7 @@ simulation_config_base_dict = {
 
 simulation_config_base_dict["ev_agent_type"] = "congestion_aware"
 # decentralized_strategies_ca =["GREEDY" "FTPL-IRS-EXP","FTPL-IRS-F2","Inde-TS"]
-decentralized_strategies_ca =["EV_DRL"]
+decentralized_strategies_ca =["DQN"]
 # decentralized_strategies_ca =["GREEDY"]
 
 

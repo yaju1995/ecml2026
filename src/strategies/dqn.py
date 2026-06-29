@@ -29,7 +29,7 @@ import torch
 
 from utils.multi_plotter import MultiLivePlotter
 from strategies.strategy import Strategy, StrategyConfig
-from DRL import DQNAgent, DQNConfig
+from DRL import DQNAgent, DQNConfig, ReplayBuffer
 
 
 @dataclass
@@ -58,13 +58,15 @@ class DRLConfig(StrategyConfig):
     grad_clip_norm: Optional[float]
     device: str
     seed: Optional[int]
+    central_buffer_mode: bool
+    replay_buffer: Optional[ReplayBuffer]
 
     @classmethod
     def default_config(cls):
         return cls(
             T=96,
             D=400,
-            name="EV_DRL",
+            name="DQN",
 
             obs_dim=7,
             act_dim=2,
@@ -83,6 +85,10 @@ class DRLConfig(StrategyConfig):
             grad_clip_norm=10.0,
             device="cuda" if torch.cuda.is_available() else "cpu",
             seed=0,
+            # should define the common memory here and 
+            # replybuffer = ReplayBuffer(100_000)
+            central_buffer_mode = False,
+            replay_buffer = None
         )
 
     def to_dqn_config(self):
@@ -99,6 +105,7 @@ class DRLConfig(StrategyConfig):
             grad_clip_norm=self.grad_clip_norm,
             device=self.device,
             seed=self.seed,
+            replay_buffer=self.replay_buffer
         )
     
 
@@ -109,6 +116,7 @@ class DRL(Strategy):
 
         self.T = config.T
         self.config = config
+        
         self.DRL_Agent = DQNAgent(name =config.name, 
                                cfg= config.to_dqn_config(), 
                                obs_dim=config.obs_dim,
@@ -198,4 +206,4 @@ class DRL(Strategy):
         # reset the DRL 
         # Reset the memory
 
-Strategy.register("EV_DRL", DRL)
+Strategy.register("DQN", DRL)

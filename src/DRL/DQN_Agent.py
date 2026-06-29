@@ -113,6 +113,7 @@ class DQNConfig:
     grad_clip_norm: Optional[float] = 10.0
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     seed: Optional[int] = 0
+    replay_buffer : Optional[ReplayBuffer]= None # if its not none the it has centralized replay buffer
 
 
 # ---------------------------
@@ -144,6 +145,8 @@ class DQNAgent:
 
         # replay
         self.buffer = ReplayBuffer(cfg.buffer_capacity)
+        if cfg.replay_buffer is not None:
+            self.buffer = cfg.replay_buffer
 
         # epsilon schedule state
         self.step_count = 0

@@ -297,11 +297,7 @@ class EVAgent(Agent, AgentInfoMixin):
         for element in self.get_observation():
             observed_context.append(element)
 
-        # print(self.get_observation())
-        # if self.strategy.name == 'EV_DRL':
-        #     # self.strategy.update(self.ins_state, self.ins_action, self.ins_reward, self.ins_next_state, self.ins_terminate)
-        # else:
-        # print(f'EV ID: {self.id}')
+        
         self.strategy.update(observed_context, reward)
 
         # Update state
