@@ -73,3 +73,5 @@ venv.bak/
 
 # Project specific
 simulation/results_ECML2026/
+simulation/results_ECML2026_30EVs_DRL_setup1_5000eps/
+simulation/results_ECML2026_bis/

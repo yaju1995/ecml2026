@@ -49,6 +49,7 @@ simulation_config_base_dict = {
 }
 
 simulation_config_base_dict["ev_agent_type"] = "congestion_aware"
+# simulation_config_base_dict["ev_agent_type"] = "default"
 # decentralized_strategies_ca =["GREEDY" "FTPL-IRS-EXP","FTPL-IRS-F2","Inde-TS"]
 decentralized_strategies_ca =["DQN"]
 # decentralized_strategies_ca =["GREEDY"]

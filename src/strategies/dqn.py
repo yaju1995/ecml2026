@@ -143,7 +143,9 @@ class DRL(Strategy):
         next_state = self._filter_obs(observed_context)
         t = observed_context[0]
         self.next_state = next_state
-        self.reward = 1 - reward  # to maximized the reward
+        self.reward = - reward  # to maximized the reward
+        # print(f'Reward:  {reward} : {self.reward}')
+
         # Tracking reward
         self.sum_reward += self.reward
         self.steps +=1

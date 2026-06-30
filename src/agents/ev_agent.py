@@ -270,6 +270,8 @@ class EVAgent(Agent, AgentInfoMixin):
             # COMPUTE LOSS (NO CONGESTION PENALTY, PRICE ONLY)
             reward = ((real_power / self.config.ev_config.p_max) * price_t)
 
+            # Need to add loss for unsatisfied SOC 
+
         # print(f'Reward : {reward} ={real_power} * {price_t}') 
 
 
