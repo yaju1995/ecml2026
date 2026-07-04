@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-
+import os
 import numpy as np
 from utils.multi_plotter import MultiLivePlotter
 from strategies.strategy import Strategy, StrategyConfig
@@ -60,12 +60,13 @@ class DRLConfig(StrategyConfig):
     seed: Optional[int]
     central_buffer_mode: bool
     replay_buffer: Optional[ReplayBuffer]
+    train_mode:str
 
     @classmethod
     def default_config(cls):
         return cls(
             T=96,
-            D=400,
+            D=10,
             name="DQN",
 
             obs_dim=7,
@@ -88,7 +89,8 @@ class DRLConfig(StrategyConfig):
             # should define the common memory here and 
             # replybuffer = ReplayBuffer(100_000)
             central_buffer_mode = False,
-            replay_buffer = None
+            replay_buffer = None,
+            train_mode = True
         )
 
     def to_dqn_config(self):
@@ -144,7 +146,15 @@ class DRL(Strategy):
         t = observed_context[0]
         self.next_state = next_state
         self.reward = - reward  # to maximized the reward
-        # print(f'Reward:  {reward} : {self.reward}')
+        
+        # Update reward for the SOC 
+        # soc excceding 80% we get penalty 
+        end_soc = observed_context[2]
+        end_soc_reward = -(0.8-end_soc)**2
+
+        # print(end_soc_reward, self.reward)
+        self.reward += end_soc_reward
+
 
         # Tracking reward
         self.sum_reward += self.reward
@@ -162,22 +172,45 @@ class DRL(Strategy):
                                             self.next_state,
                                             False)
             
-        
-        if t == 0:
-            self.DRL_Agent.train()
+        if self.config.train_mode:
+            if t%4 == 0:  # updating every hour
+            # if t == 0 : # Update once a day 
+                # print(f'updating {t/4} {self.config.train_mode}')
+                self.DRL_Agent.train()
+
+        # saving model
+        # if observed_context[7] == self.config.D-1:
+        #     if t ==95:
+        #         self.save('DQN\EV_agent')
+
     
     def act(self, context_vector)-> float:
+
+        # define Ev connection period: 
+        '''
+        If EV is connected then enable charging instant and close when EV is disconnected
+
+        '''
         # Convert Observation dataclass → flat np.array
         self.state = self._filter_obs(context_vector=context_vector)
+
+
+        # Only take action is ev is connected else not action:
         self.action = self.DRL_Agent.choose_action(self.state)
         # print(self.action)
         return self.action
     
-    def save(self, path):
-        self.DRL_Agent.save(path)
+    def save(self,path, filename='model.pth'):
+        # create path
+        model_path = os.path.join(path, 'Models/')
+        os.makedirs(model_path, exist_ok=True)
+        file_path = os.path.join(model_path, filename)
+        print(self.DRL_Agent.save(file_path))
     
-    def load(self, path):
-        self.DRL_Agent.load(path)
+    def load(self, path, filename = 'model.pth'):
+        model_path = os.path.join(path, 'Models/')
+        file_path = os.path.join(model_path, filename)
+        print(self.DRL_Agent.load(file_path))
     
     def _filter_obs(self, context_vector) -> np.ndarray:
 

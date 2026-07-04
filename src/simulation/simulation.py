@@ -637,16 +637,16 @@ class Simulation:
         for ev_agent in self.ev_agents:
             ev_obs = self.ev_get_observation(ev_agent) # this observation is next state
 
-            # getting next state s'
-            ev_agent.ins_next_state = ev_obs
+            # # getting next state s'
+            # ev_agent.ins_next_state = ev_obs
 
             # print(f'Agent {ev_agent.id}->[{ev_obs}]')
             _, reward = ev_agent.update(obs=ev_obs) # update to get reward not udpdate
             
+            # print(f'EV agent {ev_agent.id}: {reward}')
             # need to store reward 
-            ev_agent.ins_reward = reward
-            
-            ev_agent.ins_terminate = False # Not true temination become true when episode termiate [Defining final Reward]
+            # ev_agent.ins_reward = reward
+            # ev_agent.ins_terminate = False # Not true temination become true when episode termiate [Defining final Reward]
 
             new_state = ev_obs   
             # Record the state and reward
@@ -738,13 +738,17 @@ class Simulation:
             raise
     
     def save_agent_strategy(self):
-        for i, ev_agent in enumerate(self.ev_agents):
-            ev_agent.strategy.save()
+        if self.config.strategy_name == "DQN":
+            for i, ev_agent in enumerate(self.ev_agents):
+                filename = f'ev_agent_{i}.pth'
+                ev_agent.strategy.save(self.config.path, filename)
 
 
     def load_agent_strategy(self):
-        for i, ev_agent in enumerate(self.ev_agents):
-            ev_agent.strategy.load()
+        if self.config.strategy_name == "DQN":
+                for i, ev_agent in enumerate(self.ev_agents):
+                    filename = f'ev_agent_{i}.pth'            
+                    ev_agent.strategy.load(self.config.path, filename)
 
 
     def save_agent_config(self):
