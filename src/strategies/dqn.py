@@ -173,7 +173,7 @@ class DRL(Strategy):
                                             False)
             
         if self.config.train_mode:
-            if t%4 == 0:  # updating every hour
+            if t%4 == 0:  # updating every hours
             # if t == 0 : # Update once a day 
                 # print(f'updating {t/4} {self.config.train_mode}')
                 self.DRL_Agent.train()
