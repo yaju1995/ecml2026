@@ -32,6 +32,8 @@ from strategies.strategy import Strategy, StrategyConfig
 from DRL import DQNAgent, DQNConfig, ReplayBuffer
 
 
+Central_buffer = ReplayBuffer(100_000)
+
 @dataclass
 class DRLConfig(StrategyConfig):
     """Configuration class for DRL charging strategy parameters."""
@@ -89,7 +91,7 @@ class DRLConfig(StrategyConfig):
             # should define the common memory here and 
             # replybuffer = ReplayBuffer(100_000)
             central_buffer_mode = False,
-            replay_buffer = None,
+            replay_buffer = Central_buffer,
             train_mode = True
         )
 
@@ -143,17 +145,32 @@ class DRL(Strategy):
     def update(self, observed_context, reward):
         """Update strategy state given the observed transition."""
         next_state = self._filter_obs(observed_context)
+
+
         t = observed_context[0]
+        departure_time = observed_context[5]
+        instants_needed = observed_context[6]
+
+        
         self.next_state = next_state
-        self.reward = - reward  # to maximized the reward
+        system_reward = - reward  # to maximized the reward
         
         # Update reward for the SOC 
         # soc excceding 80% we get penalty 
-        end_soc = observed_context[2]
-        end_soc_reward = -(0.8-end_soc)**2
+        soc = observed_context[2]
+        end_soc_reward = - (0.8-soc)**2
 
-        # print(end_soc_reward, self.reward)
-        self.reward += end_soc_reward
+        remaining_time = departure_time -t
+        
+        if remaining_time > instants_needed:
+             slack = instants_needed /remaining_time 
+        else: 
+            slack = 1
+		
+        slack = max(0,slack)
+
+        self.reward = slack * end_soc_reward -(1-slack) * system_reward
+
 
 
         # Tracking reward
@@ -192,12 +209,14 @@ class DRL(Strategy):
 
         '''
         # Convert Observation dataclass → flat np.array
+        # print(context_vector)
         self.state = self._filter_obs(context_vector=context_vector)
 
 
         # Only take action is ev is connected else not action:
         self.action = self.DRL_Agent.choose_action(self.state)
-        # print(self.action)
+        # print(self.state[4], self.action)
+        # print(self.state)
         return self.action
     
     def save(self,path, filename='model.pth'):
@@ -213,24 +232,58 @@ class DRL(Strategy):
         print(self.DRL_Agent.load(file_path))
     
     def _filter_obs(self, context_vector) -> np.ndarray:
+        
+        # sin_t, cos_t = minute_to_sin_cos(context_vector[0],96)
+        # state = np.array([
+        #     # context_vector[0],   # Current timestep
+        #     sin_t,
+        #     cos_t,
+        #     context_vector[1],   # Current power
+        #     context_vector[2],   # Current state of charge
+        #     context_vector[3],   # Current availability status
+        #     # context_vector[4], # Arrival time
+        #     context_vector[5],   # Departure time in minutes # not remaining
+        #     context_vector[6],   # Number of instants needed to charge
+        #     # context_vector[7], # Current day
+        #     context_vector[8],   # Current price_t
+        #     context_vector[9],   # Current congestion signal
+        #     # context_vector[10],# Telecommute status
+        #     # context_vector[11],# Price prevision data for the day
+        #     # context_vector[12],# Wiring status [disconnect status]
+        # ], dtype=float)
+       
+ 
+        # return state
 
-        sin_t, cos_t = minute_to_sin_cos(context_vector[0],96)
+        t = context_vector[0]          # current timestep index
+        sin_t, cos_t = minute_to_sin_cos(t, 96)
+
+        current_power = context_vector[1]
+        soc = context_vector[2]
+        availability = context_vector[3]
+        departure_time = context_vector[5]
+        instants_needed = context_vector[6]
+        price_t = context_vector[8]
+        congestion = context_vector[9]
+
+        remaining_time = departure_time - t
+        if remaining_time > instants_needed:
+             slack = instants_needed /remaining_time 
+        else: 
+            slack = 1
+		
+        slack = max(0,slack)
+
+        # Optional: normalized versions, depending on your preprocessing
         state = np.array([
-            # context_vector[0],   # Current timestep
             sin_t,
             cos_t,
-            context_vector[1],   # Current power
-            context_vector[2],   # Current state of charge
-            # context_vector[3], # Current availability status
-            # context_vector[4], # Arrival time
-            context_vector[5],   # Departure time #in minutes
-            # context_vector[6], # Number of instants needed to charge
-            # context_vector[7],   # Current day
-            context_vector[8],   # Current price_t
-            context_vector[9],   # Current congestion signal
-            # context_vector[10],# Telecommute status
-            # context_vector[11],# Price prevision data for the day
-            # context_vector[12],# Wiring status
+            soc,
+            availability,
+            slack,
+            price_t, # add price for future
+            congestion,
+            # e.g. target_soc, next_price, min_future_price, etc.
         ], dtype=float)
 
         return state

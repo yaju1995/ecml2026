@@ -143,11 +143,11 @@ class EVAgent(Agent, AgentInfoMixin):
         self.soc_history = []
 
         # newly added for DRL 
-        self.ins_state = None
-        self.ins_action = None
-        self.ins_reward = None
-        self.ins_next_state = None
-        self.ins_terminate = None
+        # self.ins_state = None
+        # self.ins_action = None
+        # self.ins_reward = None
+        # self.ins_next_state = None
+        # self.ins_terminate = None
 
     def reset(self, obs) -> np.ndarray:
         """Reset agent state."""
@@ -218,7 +218,7 @@ class EVAgent(Agent, AgentInfoMixin):
             observed_context.append(element)
 
         # self.ins_state:
-        self.ins_state = observed_context # but it has more info than required
+        # self.ins_state = observed_context # but it has more info than required
         if self.config.strategy_config.name == "MILP" or self.config.strategy_config.name == "MILP_Price_Forecast":
             power = self.strategy.act(milp_action) * self.config.ev_config.p_max
         else:
@@ -261,6 +261,8 @@ class EVAgent(Agent, AgentInfoMixin):
                 # COMPUTE LOSS (CHARGING DURING CONGESTION PENALIZED)
                 if congestion_signal_t == 1: # GRID CONGESTION PENALTY
                     reward = +1.0
+                    # if self.strategy.name == 'DQN':
+                    #     reward *= 5
                 else:
                     reward = ((real_power / self.config.ev_config.p_max) * price_t)
                     # Normalized the power 
@@ -300,7 +302,7 @@ class EVAgent(Agent, AgentInfoMixin):
             observed_context.append(element)
 
         
-        self.strategy.update(observed_context, reward)
+        self.strategy.update(observed_context, reward) # Here strategy also update it own reward so there might be error in evaluation
 
         # Update state
         self.state.soc = soc

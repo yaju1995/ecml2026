@@ -127,6 +127,7 @@ class DQNAgent:
         self.gamma = cfg.gamma
         self.batch_size = cfg.batch_size
         self.n_actions = n_actions
+        self.central_buffer = None
 
         # seeds
         random.seed(cfg.seed)
@@ -144,9 +145,15 @@ class DQNAgent:
         self.optimizer = optim.Adam(self.q.parameters(), lr=cfg.lr)
 
         # replay
-        self.buffer = ReplayBuffer(cfg.buffer_capacity)
-        if cfg.replay_buffer is not None:
-            self.buffer = cfg.replay_buffer
+        
+        
+        if cfg.central_buffer_mode:
+            if cfg.replay_buffer is not None:
+                self.buffer = cfg.replay_buffer
+            else:
+                raise ValueError ('cfg.replay_buffer [central buffer is None]')
+        else:
+            self.buffer = ReplayBuffer(cfg.buffer_capacity)
 
         # epsilon schedule state
         self.step_count = 0

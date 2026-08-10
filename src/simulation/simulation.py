@@ -581,7 +581,7 @@ class Simulation:
             ev_obs = self.ev_get_observation(ev_agent)
             
             # need to store this obseravation in the list or dataclass
-            ev_agent.ins_state = ev_obs
+            # ev_agent.ins_state = ev_obs
 
             id = ev_agent.id
             # If MILP, use the precomputed actions
@@ -595,12 +595,17 @@ class Simulation:
                 self.agents_actions[id] = ev_agent.act(obs=ev_obs)
             
             # need to store the actions in to list or data class
+        
 
         # Congestion management
         total_power = np.sum(self.agents_actions)
         flex_t = min(self.n_flexible_power[self.episode,self.t],self.config.congestion_limit)
         random_idx = []
+        # print('Actions' , self.agents_actions)
+        # print('Power',total_power,'+', flex_t,'>', self.config.congestion_limit)
         if total_power + flex_t > self.config.congestion_limit:
+            # print(total_power, flex_t, self.config.congestion_limit)
+            # print('Congestion detected:')
             # Identify agents contributing to congestion
             responsible_agents_idx = np.where(self.agents_actions > 0)[0]
             num_resp_agents = len(responsible_agents_idx)

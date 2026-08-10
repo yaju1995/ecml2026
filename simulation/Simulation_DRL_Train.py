@@ -19,7 +19,7 @@ pv_areas = (3000.0 / 30.0)*num_ev_agents # similated based on area [PV rating?]
 
 num_sim_config = len(num_ev_agents)
 
-num_episodes = 10 #1460 # January 2021 - January 2024  # what is number of episodes
+num_episodes = 50 #1460 # January 2021 - January 2024  # what is number of episodes
 
 base_path = "results_ECML2026/"
 
@@ -73,15 +73,15 @@ for sim in tqdm(range(num_sim_config)):   # 1 based on above set balue
             
             simulation = Simulation(simulation_config)
             
-            if strategy == 'DQN':
-                simulation.load_agent_strategy()
+            # if strategy == 'DQN':
+            #     simulation.load_agent_strategy()
 
-            print(full_path)
+            # print(full_path)
             results = simulation.run()
 
             # Save the trained policy [NN model] 
-            if strategy == 'DQN':
-                simulation.save_agent_strategy()
-                pass
+            # if strategy == 'DQN':
+            #     simulation.save_agent_strategy()
+            #     pass
 
 print("Decentralized CA Done!")

@@ -987,7 +987,7 @@ class StrategyComparison:
                         gc.collect()
                         continue
 
-                    reward_history = results.reward_history  # (E, T, A)
+                    reward_history = results.price_history #reward_history  # (E, T, A)
                     E, T, A = reward_history.shape
 
                     if ev_id < 0 or ev_id >= A:
